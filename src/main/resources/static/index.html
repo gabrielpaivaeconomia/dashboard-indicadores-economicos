@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Indicadores Econômicos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+        h1 { text-align: center; }
+        select { width: 100%; padding: 10px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Dashboard - Projeções do Relatório Focus</h1>
+        <label for="indicator-select">Selecione um Indicador:</label>
+        <select id="indicator-select">
+            <option value="SELIC">Taxa Selic (% a.a.)</option>
+            <option value="IPCA">IPCA (Inflação %)</option>
+            <option value="PIB">PIB (Crescimento %)</option>
+            <option value="CÂMBIO">Câmbio (R$/US$)</option>
+        </select>
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <script>
+        const indicatorSelect = document.getElementById('indicator-select');
+        const chartCanvas = document.getElementById('myChart');
+        let myChart;
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/indicadores');
+                if (!response.ok) throw new Error('API não respondeu.');
+                return await response.json();
+            } catch (error) {
+                console.error('Falha:', error);
+                alert('Erro ao carregar dados. O servidor Java está rodando?');
+            }
+        }
+
+        function renderChart(data, selectedIndicator) {
+            const filteredData = data.filter(item => item.indicador.trim() === selectedIndicator);
+            const dataByYear = {};
+            filteredData.forEach(item => {
+                if (!dataByYear[item.projecao_ano]) dataByYear[item.projecao_ano] = [];
+                dataByYear[item.projecao_ano].push({ x: item.data_relatorio, y: item.mediana_projecao });
+            });
+
+            const datasets = Object.keys(dataByYear).sort().map(year => ({
+                label: `Projeção para ${year}`,
+                data: dataByYear[year].sort((a, b) => new Date(a.x) - new Date(b.x)),
+                fill: false,
+                tension: 0.1,
+                borderWidth: 2
+            }));
+
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(chartCanvas, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    scales: {
+                        x: { type: 'time', time: { unit: 'week', tooltipFormat: 'dd/MM/yyyy' }, title: { display: true, text: 'Data do Relatório' } },
+                        y: { title: { display: true, text: 'Valor Projetado' } }
+                    }
+                }
+            });
+        }
+
+        async function main() {
+            const allData = await fetchData();
+            if (allData) {
+                renderChart(allData, indicatorSelect.value);
+                indicatorSelect.addEventListener('change', e => renderChart(allData, e.target.value));
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>
